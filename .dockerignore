@@ -1,0 +1,99 @@
+# .dockerignore - Archivos y directorios a excluir del contexto Docker
+# Optimizado para imagen ligera
+
+# Entornos virtuales
+venv/
+env/
+.venv/
+.env/
+
+# Archivos de Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Archivos de desarrollo
+.git/
+.gitignore
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Documentación y archivos de desarrollo
+README.md
+api_examples.md
+*.md
+docs/
+DOCKER_DEPLOYMENT.md
+
+# Logs
+*.log
+logs/
+
+# Archivos temporales
+.tmp/
+temp/
+*.tmp
+
+# Archivos de sistema
+.DS_Store
+Thumbs.db
+
+# Archivos de configuración local
+.env.local
+.env.development
+.env.test
+
+# Archivos de backup
+*.bak
+*.backup
+
+# Archivos de test y scripts de desarrollo
+test_*.py
+*_test.py
+tests/
+validate-docker.sh
+test-ecr-compatibility.sh
+deploy-ecr.sh
+
+# Build tools
+Makefile
+docker-compose.yml
+.github/
+
+# Archivos de build local
+build/
+dist/
+*.egg-info/
+
+# Notebooks Jupyter
+*.ipynb
+.ipynb_checkpoints/
+
+# Archivos grandes de visualización (no necesarios en runtime)
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.svg
+
+# Scripts de desarrollo local
+start.sh
+setup.sh
+run_local.sh
+
+# Requirements de desarrollo
+requirements.txt
+
+# Solo mantener archivos esenciales:
+# - main.py (API)
+# - models/ (modelo entrenado)
+# - requirements-prod.txt (dependencias mínimas)

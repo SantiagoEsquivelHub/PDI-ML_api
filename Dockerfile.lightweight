@@ -1,0 +1,131 @@
+# Dockerfile ultra-ligero para ML Santiago API
+# Usando imagen distroless para máxima optimización de tamaño
+# Imagen final: ~400-600MB vs 2GB
+
+# ================================
+# Stage 1: Builder completo
+# ================================
+FROM --platform=linux/amd64 python:3.11-slim AS builder
+
+# Variables de entorno para el build
+ENV PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Instalar dependencias de compilación
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+# Crear directorio de trabajo
+WORKDIR /build
+
+# Copiar requirements optimizado
+COPY requirements-prod.txt .
+
+# Instalar todas las dependencias en un directorio separado
+RUN pip install --prefix=/build/venv --no-warn-script-location -r requirements-prod.txt
+
+# ================================
+# Stage 2: Runtime ultra-ligero
+# ================================
+FROM --platform=linux/amd64 gcr.io/distroless/python3-debian12 AS runtime
+
+# Copiar Python packages desde builder
+COPY --from=builder /build/venv/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /build/venv/bin /usr/local/bin
+
+# Variables de entorno
+ENV PYTHONPATH=/usr/local/lib/python3.11/site-packages:/app \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+# Establecer directorio de trabajo
+WORKDIR /app
+
+# Copiar solo archivos esenciales
+COPY main.py .
+COPY models/ ./models/
+
+# Exponer puerto
+EXPOSE 8000
+
+# Comando para producción (sin shell disponible en distroless)
+ENTRYPOINT ["python", "-m", "uvicorn"]
+CMD ["main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+# ================================
+# Stage 3: Desarrollo (con shell)
+# ================================
+FROM --platform=linux/amd64 python:3.11-slim AS development
+
+# Copiar dependencias desde builder
+COPY --from=builder /build/venv /usr/local
+
+# Instalar herramientas de desarrollo
+RUN pip install --no-cache-dir pytest pytest-asyncio httpx
+
+# Variables de entorno
+ENV PYTHONPATH=/app \
+    PYTHONUNBUFFERED=1 \
+    ENVIRONMENT=development
+
+# Crear usuario no root
+RUN groupadd -r appuser && useradd -r -g appuser appuser
+
+# Instalar curl para health checks
+RUN apt-get update && apt-get install -y --no-install-recommends curl && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copiar código completo para desarrollo
+COPY . .
+
+# Ajustar permisos
+RUN chown -R appuser:appuser /app
+USER appuser
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Comando para desarrollo
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+# ================================
+# Stage 4: Producción con shell (para debugging)
+# ================================
+FROM --platform=linux/amd64 python:3.11-slim AS production
+
+# Copiar dependencias desde builder
+COPY --from=builder /build/venv /usr/local
+
+# Variables de entorno
+ENV PYTHONPATH=/app \
+    PYTHONUNBUFFERED=1 \
+    ENVIRONMENT=production
+
+# Crear usuario no root
+RUN groupadd -r appuser && useradd -r -g appuser appuser
+
+# Instalar solo curl para health checks
+RUN apt-get update && apt-get install -y --no-install-recommends curl && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copiar solo archivos esenciales
+COPY main.py .
+COPY models/ ./models/
+
+# Ajustar permisos
+RUN chown -R appuser:appuser /app
+USER appuser
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Comando optimizado para producción
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]

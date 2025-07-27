@@ -1,0 +1,41 @@
+# Configuración para modelos y archivos de base de datos
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Variables de entorno
+.env
+.env.local
+.env.development
+.env.production
+
+# Archivos de log
+*.log
+
+# Base de datos local
+*.db
+*.sqlite3
+
+# Modelos de ML
+*.pkl
+*.joblib
+models/
+
+# Jupyter Notebooks checkpoints
+.ipynb_checkpoints/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# Dependencias
+node_modules/
+venv/
+env/
+.venv/

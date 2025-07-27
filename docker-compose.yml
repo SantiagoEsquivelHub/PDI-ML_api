@@ -1,0 +1,52 @@
+# Docker Compose para desarrollo y testing local
+# ML Santiago API
+
+version: '3.8'
+
+services:
+  # Servicio principal de la API
+  ml-santiago-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development  # Usar target de desarrollo
+      platforms:
+        - linux/amd64  # Forzar arquitectura para compatibilidad con ECR
+    container_name: ml-santiago-api-dev
+    ports:
+      - "8000:8000"
+    volumes:
+      # Montar código para desarrollo con hot reload
+      - .:/app
+      - /app/venv  # Excluir venv del montaje
+    environment:
+      - ENVIRONMENT=development
+      - PYTHONPATH=/app
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Servicio de producción (para testing)
+  ml-santiago-api-prod:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+      platforms:
+        - linux/amd64  # Forzar arquitectura para compatibilidad con ECR
+    container_name: ml-santiago-api-prod
+    ports:
+      - "8001:8000"
+    environment:
+      - ENVIRONMENT=production
+    restart: unless-stopped
+    profiles:
+      - production
+
+networks:
+  default:
+    name: ml-santiago-network
