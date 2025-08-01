@@ -91,7 +91,6 @@ setup.sh
 run_local.sh
 
 # Requirements de desarrollo
-requirements.txt
 
 # Solo mantener archivos esenciales:
 # - main.py (API)

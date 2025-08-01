@@ -30,23 +30,6 @@ services:
       retries: 3
       start_period: 40s
 
-  # Servicio de producción (para testing)
-  ml-santiago-api-prod:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: production
-      platforms:
-        - linux/amd64  # Forzar arquitectura para compatibilidad con ECR
-    container_name: ml-santiago-api-prod
-    ports:
-      - "8001:8000"
-    environment:
-      - ENVIRONMENT=production
-    restart: unless-stopped
-    profiles:
-      - production
-
 networks:
   default:
     name: ml-santiago-network

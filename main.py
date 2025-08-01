@@ -1,5 +1,6 @@
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
 import tensorflow as tf
@@ -9,8 +10,19 @@ import io
 import os
 import json
 from datetime import datetime
+import subprocess
+import tempfile
 
 app = FastAPI(title="ML Image Classifier API", version="1.0.0")
+
+# Configurar CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Permite todas las origins en desarrollo
+    allow_credentials=True,
+    allow_methods=["*"],  # Permite todos los métodos HTTP
+    allow_headers=["*"],  # Permite todos los headers
+)
 
 # Variables globales
 model = None
@@ -32,6 +44,17 @@ class IrisResponse(BaseModel):
     all_predictions: List[float]
     input_data: dict
     timestamp: str
+
+class BenchmarkResponse(BaseModel):
+    status: str
+    summary: dict
+    sequential_time: float
+    parallel_time: float
+    speedup: float
+    efficiency: float
+    cpu_cores_used: int
+    timestamp: str
+    message: str
 
 def load_model():
     """Cargar modelo entrenado"""
@@ -228,3 +251,72 @@ async def retrain_model():
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error en reentrenamiento: {e}")
+
+@app.post("/benchmark/parallel", response_model=BenchmarkResponse)
+async def run_parallel_benchmark():
+    """
+    Ejecutar comparación de rendimiento entre entrenamiento secuencial y paralelo
+    """
+    try:
+        print("🚀 Iniciando benchmark de entrenamiento paralelo...")
+        
+        # Ejecutar el script de comparación
+        result = subprocess.run(
+            ["python", "train_parallel_simple.py"],
+            capture_output=True,
+            text=True,
+            cwd="/Users/parra/Documents/AP/dev/univalle/ml-santiago/api"
+        )
+        
+        if result.returncode != 0:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error ejecutando benchmark: {result.stderr}"
+            )
+        
+        # Leer los resultados del benchmark
+        benchmark_path = "models/benchmark_results.json"
+        if not os.path.exists(benchmark_path):
+            raise HTTPException(
+                status_code=500,
+                detail="No se pudieron generar los resultados del benchmark"
+            )
+        
+        with open(benchmark_path, 'r') as f:
+            benchmark_data = json.load(f)
+        
+        return BenchmarkResponse(
+            status="success",
+            summary=benchmark_data['summary'],
+            sequential_time=benchmark_data['sequential']['total_time'],
+            parallel_time=benchmark_data['parallel']['total_time'],
+            speedup=benchmark_data['summary']['speedup'],
+            efficiency=benchmark_data['summary']['efficiency'],
+            cpu_cores_used=benchmark_data['summary']['cpu_cores_used'],
+            timestamp=benchmark_data['timestamp'],
+            message=f"Benchmark completado. Speedup: {benchmark_data['summary']['speedup']}x con {benchmark_data['summary']['cpu_cores_used']} cores"
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error ejecutando benchmark: {str(e)}")
+
+@app.get("/benchmark/results")
+async def get_benchmark_results():
+    """
+    Obtener los últimos resultados de benchmark guardados
+    """
+    try:
+        benchmark_path = "models/benchmark_results.json"
+        if not os.path.exists(benchmark_path):
+            raise HTTPException(
+                status_code=404,
+                detail="No hay resultados de benchmark disponibles. Ejecuta /benchmark/parallel primero."
+            )
+        
+        with open(benchmark_path, 'r') as f:
+            benchmark_data = json.load(f)
+        
+        return benchmark_data
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error obteniendo resultados: {str(e)}")

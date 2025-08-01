@@ -32,7 +32,9 @@ RUN echo "fastapi==0.104.1" > requirements-prod.txt && \
     echo "python-multipart==0.0.6" >> requirements-prod.txt && \
     echo "python-dotenv==1.0.0" >> requirements-prod.txt && \
     echo "scikit-learn==1.3.2" >> requirements-prod.txt && \
-    echo "pandas==2.1.4" >> requirements-prod.txt
+    echo "pandas==2.1.4" >> requirements-prod.txt && \
+    echo "ray[default]==2.8.0" >> requirements-prod.txt && \
+    echo "psutil==5.9.6" >> requirements-prod.txt
 
 # Instalar dependencias en un directorio separado
 RUN pip install --prefix=/build/pip-install -r requirements-prod.txt
