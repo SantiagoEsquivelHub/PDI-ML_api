@@ -18,10 +18,14 @@ app = FastAPI(title="ML Image Classifier API", version="1.0.0")
 # Configurar CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Permite todas las origins en desarrollo
+    allow_origins=[
+        "https://pdi-ml-front.vercel.app",  # Tu dominio específico
+        "http://localhost:3000",             # Para desarrollo local
+        "http://localhost:8000",             # Para testing local
+    ],
     allow_credentials=True,
-    allow_methods=["*"],  # Permite todos los métodos HTTP
-    allow_headers=["*"],  # Permite todos los headers
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "Accept", "Origin", "X-Requested-With"],
 )
 
 # Variables globales
@@ -45,16 +49,6 @@ class IrisResponse(BaseModel):
     input_data: dict
     timestamp: str
 
-class BenchmarkResponse(BaseModel):
-    status: str
-    summary: dict
-    sequential_time: float
-    parallel_time: float
-    speedup: float
-    efficiency: float
-    cpu_cores_used: int
-    timestamp: str
-    message: str
 
 def load_model():
     """Cargar modelo entrenado"""
@@ -79,26 +73,6 @@ def load_model():
         print(f"Error cargando modelo: {e}")
         return False
 
-def preprocess_image(image_bytes):
-    """Preprocesar imagen para predicción"""
-    try:
-        # Abrir imagen
-        image = Image.open(io.BytesIO(image_bytes))
-        
-        # Convertir a RGB si es necesario
-        if image.mode != 'RGB':
-            image = image.convert('RGB')
-        
-        # Redimensionar
-        image = image.resize((128, 128))
-        
-        # Convertir a array numpy
-        img_array = np.array(image)
-        img_array = np.expand_dims(img_array, axis=0)
-        
-        return img_array
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Error procesando imagen: {e}")
 
 @app.on_event("startup")
 async def startup_event():
@@ -118,8 +92,6 @@ async def root():
         "endpoints": {
             "health": "/health",
             "predict_iris": "/predict/iris",
-            "predict_image": "/predict/image",
-            "retrain": "/retrain"
         },
         "timestamp": datetime.now().isoformat()
     }
@@ -190,115 +162,6 @@ async def predict_iris(iris_data: IrisInput):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error en predicción: {e}")
 
-@app.post("/predict/image")
-async def predict_image(file: UploadFile = File(...)):
-    """Clasificar imagen subida (endpoint original)"""
-    if model is None:
-        raise HTTPException(
-            status_code=503, 
-            detail="Modelo no disponible. Ejecutar entrenamiento primero."
-        )
-    
-    # Validar tipo de archivo
-    if not file.content_type.startswith('image/'):
-        raise HTTPException(
-            status_code=400, 
-            detail="El archivo debe ser una imagen"
-        )
-    
-    try:
-        # Leer imagen
-        image_bytes = await file.read()
-        
-        # Preprocesar
-        processed_image = preprocess_image(image_bytes)
-        
-        # Hacer predicción
-        predictions = model.predict(processed_image)
-        predicted_class = int(np.argmax(predictions[0]))
-        confidence = float(np.max(predictions[0]))
-        
-        # Preparar respuesta
-        result = {
-            "filename": file.filename,
-            "predicted_class": predicted_class,
-            "confidence": confidence,
-            "all_predictions": predictions[0].tolist(),
-            "timestamp": datetime.now().isoformat()
-        }
-        
-        return JSONResponse(content=result)
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error en predicción: {e}")
-
-# Mantener endpoint /predict para compatibilidad
-@app.post("/predict")
-async def predict_legacy(file: UploadFile = File(...)):
-    """Endpoint legacy - redirige a predict_image"""
-    return await predict_image(file)
-
-@app.post("/retrain")
-async def retrain_model():
-    """Endpoint para reentrenar el modelo"""
-    try:
-        # Aquí ejecutarías el script de entrenamiento
-        # Por ahora solo simulamos
-        return {
-            "message": "Reentrenamiento iniciado",
-            "status": "success",
-            "timestamp": datetime.now().isoformat()
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error en reentrenamiento: {e}")
-
-@app.post("/benchmark/parallel", response_model=BenchmarkResponse)
-async def run_parallel_benchmark():
-    """
-    Ejecutar comparación de rendimiento entre entrenamiento secuencial y paralelo
-    """
-    try:
-        print("🚀 Iniciando benchmark de entrenamiento paralelo...")
-        
-        # Ejecutar el script de comparación
-        result = subprocess.run(
-            ["python", "train_parallel_simple.py"],
-            capture_output=True,
-            text=True,
-            cwd="/Users/parra/Documents/AP/dev/univalle/ml-santiago/api"
-        )
-        
-        if result.returncode != 0:
-            raise HTTPException(
-                status_code=500,
-                detail=f"Error ejecutando benchmark: {result.stderr}"
-            )
-        
-        # Leer los resultados del benchmark
-        benchmark_path = "models/benchmark_results.json"
-        if not os.path.exists(benchmark_path):
-            raise HTTPException(
-                status_code=500,
-                detail="No se pudieron generar los resultados del benchmark"
-            )
-        
-        with open(benchmark_path, 'r') as f:
-            benchmark_data = json.load(f)
-        
-        return BenchmarkResponse(
-            status="success",
-            summary=benchmark_data['summary'],
-            sequential_time=benchmark_data['sequential']['total_time'],
-            parallel_time=benchmark_data['parallel']['total_time'],
-            speedup=benchmark_data['summary']['speedup'],
-            efficiency=benchmark_data['summary']['efficiency'],
-            cpu_cores_used=benchmark_data['summary']['cpu_cores_used'],
-            timestamp=benchmark_data['timestamp'],
-            message=f"Benchmark completado. Speedup: {benchmark_data['summary']['speedup']}x con {benchmark_data['summary']['cpu_cores_used']} cores"
-        )
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error ejecutando benchmark: {str(e)}")
 
 @app.get("/benchmark/results")
 async def get_benchmark_results():
